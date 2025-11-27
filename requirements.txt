@@ -1,0 +1,24 @@
+# RAG core
+langchain
+langchain-community
+langchain-core
+langchain-text-splitters
+langchain-unstructured
+chromadb
+
+# embeddings / models
+sentence-transformers
+torch
+transformers
+
+# data + ingestion
+datasets
+unstructured[pdf,docx,excel,ppt]    # tweak extras as needed
+python-magic
+reportlab
+
+# utils
+python-dotenv
+tqdm
+numpy
+pandas
