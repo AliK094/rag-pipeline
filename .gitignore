@@ -22,7 +22,11 @@ venv/
 # Local data folders (do not track)
 # ----------------------------------------
 data/corpus/*
+!data/corpus/.gitkeep
+
 data/corpus_test/*
+!data/corpus_test/.gitkeep
+
 data/indexes/
 data/indexes/chroma/
 raw_data/
