@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 from typing import Optional
 
-from rag_pipeline.ingestion.data_loader import load_corpus_directory
+from rag_pipeline.ingestion.data_loader import load_corpus
 from rag_pipeline.ingestion.chunker import DocumentChunker
 from rag_pipeline.ingestion.embedder import LocalBGEEmbedder
 from rag_pipeline.ingestion.chromadb import ChromaDB
@@ -19,6 +19,7 @@ def build_index(
     device: Optional[str] = None,
     batch_size: int = 128,
     collection_name: str = "hotpot_corpus",
+    reset_db: bool = False,
 ) -> None:
 
     corpus_path = Path(corpus_dir).expanduser().resolve()
@@ -26,7 +27,7 @@ def build_index(
     index_path.mkdir(parents=True, exist_ok=True)
 
     print(f"[build_index] Loading corpus from: {corpus_path}")
-    docs = load_corpus_directory(corpus_path)
+    docs = load_corpus(corpus_path)
     print(f"[build_index] Loaded {len(docs)} raw documents")
 
     # --- Chunk documents ---
@@ -51,11 +52,18 @@ def build_index(
         persist_dir=index_path,
         collection_name=collection_name,
         embedder=embedder,
+        reset_db=reset_db,
     )
+
+    coll = chroma_db.client.get_collection(name=chroma_db.collection_name)
+    print("Count before:", coll.count())
 
     print(f"[build_index] Building ChromaDB collection '{collection_name}'...")
     chroma_db.build(chunks)
     print("[build_index] Done.")
+
+    coll = chroma_db.client.get_collection(name=chroma_db.collection_name)
+    print("Count after:", coll.count())
 
 
 if __name__ == "__main__":
@@ -68,6 +76,7 @@ if __name__ == "__main__":
     parser.add_argument("--device", type=str, default="mps")  # default for mac!
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--collection_name", type=str, default="hotpot_corpus")
+    parser.add_argument("--reset_db", action="store_true", help="Whether to reset the existing DB.")
 
     args = parser.parse_args()
 
@@ -80,4 +89,5 @@ if __name__ == "__main__":
         device=args.device,
         batch_size=args.batch_size,
         collection_name=args.collection_name,
+        reset_db=args.reset_db,
     )

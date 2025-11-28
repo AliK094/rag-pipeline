@@ -1,8 +1,6 @@
 from dataclasses import dataclass, field
 from typing import List, Optional, Sequence, Union
 
-from pathlib import Path
-
 from sentence_transformers import SentenceTransformer
 from langchain_core.documents import Document
 from chromadb.api.types import EmbeddingFunction
@@ -77,7 +75,7 @@ class LocalBGEEmbedder:
             batch_vecs = self._model.encode(
                 batch,
                 show_progress_bar=False,
-                convert_to_numpy=False,
+                convert_to_numpy=True,  # ensures ndarray, .tolist() is safe
                 normalize_embeddings=self.normalize_embeddings,
             )
 
@@ -85,7 +83,7 @@ class LocalBGEEmbedder:
                 vectors.append(vec.tolist())
 
         return vectors
-    
+
     def embed_documents(
         self,
         docs: Sequence[Union[Document, str]],
@@ -104,12 +102,10 @@ class LocalBGEEmbedder:
         if not docs:
             return []
 
-        # If the first element is a Document, assume they all are.
         first = docs[0]
         if isinstance(first, Document):
             texts = [d.page_content for d in docs]  # type: ignore[arg-type]
         else:
-            # Assume it's already a list of strings
             texts = [str(d) for d in docs]
 
         return self.embed_texts(texts)
@@ -128,12 +124,13 @@ class LocalBGEEmbedder:
         vec = self._model.encode(
             to_encode,
             show_progress_bar=False,
-            convert_to_numpy=False,
+            convert_to_numpy=True,
             normalize_embeddings=self.normalize_embeddings,
         )
 
         return vec.tolist()
-    
+
+
 class ChromaBGEEmbedder(EmbeddingFunction):
     """
     Thin wrapper around LocalBGEEmbedder for ChromaDB.
@@ -143,7 +140,7 @@ class ChromaBGEEmbedder(EmbeddingFunction):
     def __init__(self, base_embedder: LocalBGEEmbedder):
         self.base = base_embedder
 
-    def __call__(self, input: List[str]):
+    def __call__(self, input: List[str]) -> List[List[float]]:
         """
         ChromaDB embedding call.
 
@@ -152,5 +149,4 @@ class ChromaBGEEmbedder(EmbeddingFunction):
         input : List[str]
             List of raw strings to embed.
         """
-        # Chroma always sends list[str]
         return self.base.embed_texts(input)

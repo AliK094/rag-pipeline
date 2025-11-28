@@ -9,7 +9,8 @@ wheels/
 # Virtual environments
 .venv
 .vscode/
-data/
+data/corpus/*
+data/corpus_test/*
 raw_data/
 main.py
 

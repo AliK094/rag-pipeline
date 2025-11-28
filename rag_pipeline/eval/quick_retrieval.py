@@ -19,7 +19,7 @@ def main():
     client = chromadb.PersistentClient(path=str(persist_dir))
     collection = client.get_collection(
         name=collection_name,
-        embedding_function=embedder,   # <-- correct
+        embedding_function=embedder,
     )
 
     # 3) Test query

@@ -1,13 +1,20 @@
 import json
 from pathlib import Path
-from typing import List, Union, Dict, Any
+from typing import List, Union, Dict, Any, Sequence
 
 from langchain_core.documents import Document
 from langchain_unstructured import UnstructuredLoader
 from langchain_community.document_loaders import PyPDFLoader, TextLoader, BSHTMLLoader
-from langchain_community.vectorstores.utils import filter_complex_metadata
 
 PathLike = Union[str, Path]
+
+
+def _resolve_path(path: PathLike) -> Path:
+    """Resolve a path and ensure it exists."""
+    p = Path(path).expanduser().resolve()
+    if not p.exists():
+        raise FileNotFoundError(f"Path not found: {p}")
+    return p
 
 
 def load_json_corpus(path: PathLike) -> List[Document]:
@@ -20,7 +27,7 @@ def load_json_corpus(path: PathLike) -> List[Document]:
       ...
     ]
     """
-    p = Path(path).expanduser().resolve()
+    p = _resolve_path(path)
     if not p.is_file():
         raise FileNotFoundError(f"Corpus file not found: {p}")
 
@@ -41,6 +48,8 @@ def load_json_corpus(path: PathLike) -> List[Document]:
         metadata["title"] = obj.get("title")
         metadata["source"] = obj.get("source", "hotpot_qa")
         metadata["corpus_file"] = str(p)
+        metadata["source_path"] = str(p)
+        metadata["doc_type"] = "json"
 
         docs.append(
             Document(
@@ -51,49 +60,78 @@ def load_json_corpus(path: PathLike) -> List[Document]:
 
     return docs
 
+
+def _attach_common_metadata(
+    docs: List[Document],
+    source_path: Path,
+    doc_type: str,
+) -> List[Document]:
+    """Attach standard metadata fields to each document."""
+    for d in docs:
+        # Do not blow away existing metadata
+        d.metadata = {
+            **(d.metadata or {}),
+            "source_path": str(source_path),
+            "doc_type": doc_type,
+        }
+    return docs
+
+
 def load_pdf_file(path: PathLike) -> List[Document]:
-    """
-    Load a PDF as Documents using PyPDFLoader.
-    """
-    p = Path(path).expanduser().resolve()
+    """Load a PDF as Documents using PyPDFLoader."""
+    p = _resolve_path(path)
     loader = PyPDFLoader(str(p))
     docs = loader.load()
-    return docs
+    return _attach_common_metadata(docs, p, doc_type="pdf")
 
 
 def load_txt_file(path: PathLike) -> List[Document]:
-    """
-    Load a TXT file as Documents.
-    """
-    p = Path(path).expanduser().resolve()
+    """Load a TXT file as Documents using TextLoader."""
+    p = _resolve_path(path)
     loader = TextLoader(str(p), encoding="utf-8")
     docs = loader.load()
-    return docs
+    return _attach_common_metadata(docs, p, doc_type="txt")
 
 
 def load_html_file(path: PathLike) -> List[Document]:
-    """
-    Load an HTML file as Documents.
-    """
-    p = Path(path).expanduser().resolve()
+    """Load an HTML file as Documents using BSHTMLLoader."""
+    p = _resolve_path(path)
     loader = BSHTMLLoader(str(p))
     docs = loader.load()
-    return docs
+    return _attach_common_metadata(docs, p, doc_type="html")
+
 
 def load_unstructured_file(path: PathLike) -> List[Document]:
     """
     Fallback loader for other formats using UnstructuredLoader
     (DOCX, PPTX, etc.).
     """
-    p = Path(path).expanduser().resolve()
+    p = _resolve_path(path)
     loader = UnstructuredLoader(
         file_path=str(p),
         partition_via_api=False,
         languages=["eng"],
     )
-    docs = loader.load()  # List[Document]
-    # return _normalize_and_filter_docs(docs, p)
-    return docs
+    docs = loader.load()
+    return _attach_common_metadata(docs, p, doc_type="unstructured")
+
+
+def _load_file_by_extension(path: Path) -> List[Document]:
+    """Load a single file based on its extension."""
+    ext = path.suffix.lower()
+
+    if ext == ".json":
+        return load_json_corpus(path)
+    elif ext == ".pdf":
+        return load_pdf_file(path)
+    elif ext == ".txt":
+        return load_txt_file(path)
+    elif ext in {".html", ".htm"}:
+        return load_html_file(path)
+    else:
+        return load_unstructured_file(path)
+
+
 
 def load_corpus_directory(path: PathLike, recursive: bool = True) -> List[Document]:
     """
@@ -106,7 +144,7 @@ def load_corpus_directory(path: PathLike, recursive: bool = True) -> List[Docume
       - *.html  → load_html_file()
       - others  → load_unstructured_file()
     """
-    p = Path(path).expanduser().resolve()
+    p = _resolve_path(path)
     if not p.is_dir():
         raise NotADirectoryError(f"Not a directory: {p}")
 
@@ -144,6 +182,56 @@ def load_corpus_directory(path: PathLike, recursive: bool = True) -> List[Docume
                 print(f"[data_loader] Processed {num_docs} docs so far...")
 
         except Exception as e:
+            # In a real package, you'd likely use logging instead of print
             print(f"[WARN] Skipping {file_path}: {e}")
+
+    return all_docs
+
+
+def load_corpus(
+    paths: Union[PathLike, Sequence[PathLike]],
+    recursive: bool = True,
+) -> List[Document]:
+    """
+    General-purpose corpus loader.
+
+    Supports:
+      - A single directory path  → walks and loads all files inside.
+      - A single file path       → loads that file only.
+      - A list/tuple of paths    → each can be a file or a directory.
+
+    Examples
+    --------
+    Load a directory:
+
+        docs = load_corpus("data/corpus")
+
+    Load a single PDF:
+
+        docs = load_corpus("data/docs/paper.pdf")
+
+    Load a mix of files and directories:
+
+        docs = load_corpus([
+            "data/corpus",
+            "notes/extra.txt",
+            "report.pdf",
+        ])
+    """
+    # Normalize to a sequence
+    if isinstance(paths, (str, Path)):
+        paths_seq: Sequence[PathLike] = [paths]
+    else:
+        paths_seq = paths
+
+    all_docs: List[Document] = []
+
+    for p in paths_seq:
+        resolved = _resolve_path(p)
+        if resolved.is_dir():
+            docs = load_corpus_directory(resolved, recursive=recursive)
+        else:
+            docs = _load_file_by_extension(resolved)
+        all_docs.extend(docs)
 
     return all_docs
