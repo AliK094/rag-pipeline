@@ -1,22 +1,45 @@
-# Python-generated files
+# ----------------------------------------
+# Python bytecode & build artifacts
+# ----------------------------------------
 __pycache__/
-*.py[oc]
+*.py[cod]
+*.so
+*.egg-info/
 build/
 dist/
 wheels/
-*.egg-info
 
-# Virtual environments
-.venv
+# ----------------------------------------
+# Virtual environments & IDE configs
+# ----------------------------------------
+.venv/
+env/
+venv/
 .vscode/
+.idea/
+
+# ----------------------------------------
+# Local data folders (do not track)
+# ----------------------------------------
 data/corpus/*
 data/corpus_test/*
 data/indexes/
+data/indexes/chroma/
 raw_data/
+
+# ----------------------------------------
+# Application entry points (local only)
+# ----------------------------------------
 main.py
 
-# Jupyter Notebooks
-/notebook
+# ----------------------------------------
+# Jupyter Notebook checkpoints & notebooks
+# ----------------------------------------
+notebook/
+*.ipynb_checkpoints/
 
+# ----------------------------------------
+# Environment & config files
+# ----------------------------------------
 .env
-ub.lock
+uv.lock
